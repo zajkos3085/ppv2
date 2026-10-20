@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PP - Planer Pracy (Serwis HVAC)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Leaflet CSS & JS dla Mapy -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .leaflet-container { font-family: inherit; z-index: 10; background-color: #e2e8f0; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col md:flex-row">
+
+  <!-- NOTIFICATION TOAST -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 hidden items-center gap-3 px-4 py-3 rounded-xl shadow-xl border bg-slate-900 text-white border-slate-700 transition-all">
+    <span id="toast-msg" class="text-sm font-medium">Komunikat</span>
+  </div>
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="w-full md:w-64 lg:w-72 bg-slate-950 text-white shadow-xl md:min-h-screen md:sticky md:top-0 md:h-screen flex flex-col justify-between border-b md:border-b-0 md:border-r border-slate-800 z-30 shrink-0">
+    <div class="p-4 sm:p-5 space-y-6">
+      <div class="flex items-center gap-3.5 cursor-pointer" onclick="switchTab('dashboard')">
+        <div class="relative w-11 h-11 rounded-xl bg-gradient-to-br from-sky-500 to-blue-700 flex items-center justify-center shadow-md shadow-sky-500/20 border border-sky-400/30 shrink-0">
+          <span class="text-xl font-black text-white tracking-tighter">PP</span>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-lg font-extrabold tracking-tight text-white">PP</span>
+            <span class="text-[11px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded bg-sky-500/20 text-sky-300">Planer</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-0.5">Serwis HVAC</p>
+        </div>
+      </div>
+
+      <nav class="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-1 md:pb-0" id="nav-tabs">
+        <button onclick="switchTab('dashboard')" id="nav-btn-dashboard" class="nav-btn w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition bg-sky-600 text-white shadow-md">
+          <div class="flex items-center gap-3"><i data-lucide="layout-dashboard" class="w-4 h-4"></i><span>Pulpit (Start)</span></div>
+          <span id="badge-urgent" class="bg-rose-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full hidden">0</span>
+        </button>
+        <button onclick="switchTab('clients')" id="nav-btn-clients" class="nav-btn w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition text-slate-300 hover:bg-slate-900">
+          <div class="flex items-center gap-3"><i data-lucide="users" class="w-4 h-4"></i><span>Klienci</span></div>
+          <span id="badge-clients" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">0</span>
+        </button>
+        <button onclick="switchTab('devices_db')" id="nav-btn-devices_db" class="nav-btn w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition text-slate-300 hover:bg-slate-900">
+          <div class="flex items-center gap-3"><i data-lucide="wrench" class="w-4 h-4"></i><span>Baza Urządzeń</span></div>
+          <span id="badge-catalog" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">0</span>
+        </button>
+        <button onclick="switchTab('map')" id="nav-btn-map" class="nav-btn w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition text-slate-300 hover:bg-slate-900">
+          <div class="flex items-center gap-3"><i data-lucide="map" class="w-4 h-4"></i><span>Mapa Klientów</span></div>
+        </button>
+        <button onclick="switchTab('planner')" id="nav-btn-planner" class="nav-btn w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition text-slate-300 hover:bg-slate-900">
+          <div class="flex items-center gap-3"><i data-lucide="calendar" class="w-4 h-4"></i><span>Planer i Trasa</span></div>
+          <span id="badge-today" class="bg-amber-400 text-slate-950 text-[11px] font-extrabold px-2 py-0.5 rounded-full hidden">0</span>
+        </button>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- MAIN AREA -->
+  <div class="flex-1 flex flex-col min-w-0">
+    <header class="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-3.5 sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 id="header-title" class="text-base sm:text-lg font-extrabold text-slate-900">Pulpit główny</h1>
+        <p id="header-date" class="text-xs text-slate-500">Dzisiaj</p>
+      </div>
+      <div class="flex items-center gap-2 ml-auto">
+        <button onclick="openScheduleModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5">
+          <i data-lucide="calendar" class="w-4 h-4 text-sky-600"></i><span>Zaplanuj wizytę</span>
+        </button>
+        <button onclick="openAddDeviceModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
+          <i data-lucide="wrench" class="w-4 h-4"></i><span>+ Dodaj urządzenie</span>
+        </button>
+        <button onclick="openClientModal()" class="bg-sky-600 hover:bg-sky-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
+          <i data-lucide="plus" class="w-4 h-4"></i><span>Dodaj klienta</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      
+      <!-- TAB: DASHBOARD -->
+      <div id="tab-dashboard" class="tab-content space-y-6">
+        <div id="empty-state" class="bg-white rounded-2xl p-8 text-center border border-slate-200 shadow-sm hidden">
+          <i data-lucide="wrench" class="w-12 h-12 text-sky-600 mx-auto mb-3"></i>
+          <h2 class="text-xl font-bold text-slate-900">Witaj w PP — Planer Pracy!</h2>
+          <p class="text-sm text-slate-600 max-w-lg mx-auto mt-1 mb-5">Twoja baza jest pusta. Dodaj klienta lub wgraj przykładowe dane.</p>
+          <button onclick="seedSampleData()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-sm">Wczytaj przykładową bazę</button>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div onclick="switchTab('planner')" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-sky-400">
+            <span class="text-xs font-bold uppercase text-slate-400">Plan na dzisiaj</span>
+            <div id="stat-today" class="text-2xl font-extrabold text-slate-900 mt-1">0 wizyt</div>
+          </div>
+          <div onclick="filterAndSwitchClients('overdue')" class="bg-white p-4 rounded-2xl border border-rose-200 shadow-sm cursor-pointer">
+            <span class="text-xs font-bold uppercase text-rose-500">Przeglądy po terminie</span>
+            <div id="stat-overdue" class="text-2xl font-extrabold text-rose-600 mt-1">0 urz.</div>
+          </div>
+          <div onclick="filterAndSwitchClients('soon')" class="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm cursor-pointer">
+            <span class="text-xs font-bold uppercase text-amber-600">Kończące się (30 dni)</span>
+            <div id="stat-soon" class="text-2xl font-extrabold text-amber-600 mt-1">0 urz.</div>
+          </div>
+          <div onclick="filterAndSwitchClients('all')" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer">
+            <span class="text-xs font-bold uppercase text-slate-400">Wszyscy Klienci</span>
+            <div id="stat-clients" class="text-2xl font-extrabold text-slate-900 mt-1">0</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div class="lg:col-span-7 space-y-6">
+            <!-- TODAY VISITS -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div class="px-5 py-4 bg-slate-900 text-white flex justify-between items-center">
+                <h2 id="today-panel-title" class="text-base font-bold">Plan pracy na dzisiaj</h2>
+                <button id="today-route-btn" onclick="openTodayRoute()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs px-3 py-2 rounded-xl hidden items-center gap-1.5 shadow">
+                  <i data-lucide="navigation" class="w-3.5 h-3.5"></i> Trasa Google Maps
+                </button>
+              </div>
+              <div id="today-visits-list" class="p-4 space-y-2.5"></div>
+            </div>
+
+            <!-- URGENT INSPECTIONS -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div class="px-5 py-4 border-b bg-amber-50/70 flex justify-between items-center">
+                <h2 class="text-base font-bold text-slate-900">Kończące się terminy przeglądów i gwarancji</h2>
+                <button id="toggle-urgent-btn" onclick="toggleUrgentList()" class="px-3 py-1 bg-white border rounded-xl text-xs font-bold hidden">Rozwiń pełną listę</button>
+              </div>
+              <div id="urgent-list" class="divide-y divide-slate-100"></div>
+            </div>
+          </div>
+
+          <div class="lg:col-span-5 space-y-6">
+            <!-- CALENDAR -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <div class="flex justify-between items-center mb-4">
+                <h2 id="cal-month-label" class="text-base font-bold text-slate-900">Kalendarz</h2>
+                <div class="flex items-center gap-1.5">
+                  <button onclick="changeMonth(-1)" class="p-1.5 border rounded-lg"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                  <button onclick="changeMonth(1)" class="p-1.5 border rounded-lg"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                </div>
+              </div>
+              <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-slate-400 pb-2">
+                <div>Pon</div><div>Wt</div><div>Śr</div><div>Czw</div><div>Pt</div><div>Sob</div><div>Ndz</div>
+              </div>
+              <div id="calendar-grid" class="grid grid-cols-7 gap-1.5"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: CLIENTS -->
+      <div id="tab-clients" class="tab-content space-y-4 hidden">
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col xl:flex-row gap-3 justify-between items-center">
+          <div class="relative flex-1 w-full">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="client-search-input" oninput="renderClients()" placeholder="Szukaj klienta po nazwisku, adresie, telefonie lub urządzeniu..." class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-500">
+          </div>
+          <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+            <select id="device-filter-select" onchange="renderClients()" class="bg-slate-50 border rounded-xl px-3 py-2 text-xs font-medium outline-none">
+              <option value="all">Wszystkie urządzenia</option>
+              <option value="heat_pump">🔥 Pompy ciepła</option>
+              <option value="ac">❄️ Klimatyzacja</option>
+              <option value="ventilation">💨 Wentylacja</option>
+            </select>
+            <button onclick="exportClientsCSV()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5">
+              <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Eksport CSV
+            </button>
+            <input type="file" id="csv-file-input" accept=".csv" onchange="importClientsCSV(event)" class="hidden">
+            <button onclick="document.getElementById('csv-file-input').click()" class="bg-slate-100 hover:bg-slate-200 border text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5">
+              <i data-lucide="upload" class="w-4 h-4"></i> Import CSV
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-900 text-slate-200 text-[11px] uppercase tracking-wider font-bold">
+                <th class="py-3 px-4">Klient</th>
+                <th class="py-3 px-4">Adres</th>
+                <th class="py-3 px-4">Telefon</th>
+                <th class="py-3 px-4">Urządzenia klienta (Terminy i Gwarancje)</th>
+                <th class="py-3 px-4 text-right">Akcje</th>
+              </tr>
+            </thead>
+            <tbody id="clients-table-body" class="divide-y divide-slate-200 text-xs sm:text-sm"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB: DEVICES DB -->
+      <div id="tab-devices_db" class="tab-content space-y-6 hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div class="lg:col-span-4 bg-white rounded-2xl shadow-sm border p-5 space-y-4">
+            <h2 class="text-sm font-bold text-slate-900">Dodaj model do Bazy Urządzeń</h2>
+            <form onsubmit="handleSaveCatalogItem(event)" class="space-y-3">
+              <select id="catalog-type" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+                <option value="heat_pump">🔥 Pompa ciepła</option>
+                <option value="ac">❄️ Klimatyzacja</option>
+                <option value="ventilation">💨 Wentylacja / Rekuperacja</option>
+              </select>
+              <input type="text" id="catalog-brand" required placeholder="Producent (np. Panasonic)" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+              <input type="text" id="catalog-model" required placeholder="Model i moc (np. Aquarea 9kW)" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+              <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-sm">+ Dodaj model</button>
+            </form>
+          </div>
+          <div class="lg:col-span-8 bg-white rounded-2xl shadow-sm border overflow-hidden">
+            <table class="w-full text-left">
+              <thead>
+                <tr class="bg-slate-900 text-slate-200 text-[11px] uppercase font-bold">
+                  <th class="py-3 px-4">Typ</th>
+                  <th class="py-3 px-4">Model</th>
+                  <th class="py-3 px-4 text-right">Akcje</th>
+                </tr>
+              </thead>
+              <tbody id="catalog-table-body" class="divide-y text-xs sm:text-sm"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: MAP -->
+      <div id="tab-map" class="tab-content space-y-4 hidden">
+        <div class="bg-white p-4 rounded-2xl shadow-sm border flex justify-between items-center flex-wrap gap-3">
+          <div class="flex gap-2">
+            <button onclick="setMapTile('street')" id="map-btn-street" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white">Mapa Ulic</button>
+            <button onclick="setMapTile('voyager')" id="map-btn-voyager" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100">Jasna Carto</button>
+            <button onclick="setMapTile('satellite')" id="map-btn-satellite" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100">Satelita</button>
+          </div>
+          <button onclick="refreshMap()" class="px-3 py-1.5 bg-sky-50 text-sky-700 border rounded-xl text-xs font-bold">Wyśrodkuj mapę</button>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm border overflow-hidden relative">
+          <div id="map-container" style="height: 560px; width: 100%;"></div>
+        </div>
+      </div>
+
+      <!-- TAB: PLANNER -->
+      <div id="tab-planner" class="tab-content space-y-6 hidden">
+        <div class="bg-white p-4 rounded-2xl shadow-sm border flex justify-between items-center flex-wrap gap-3">
+          <div class="flex gap-2">
+            <button onclick="setPlannerMode('day')" id="planner-mode-day" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 text-white">Plan Dnia</button>
+            <button onclick="setPlannerMode('week')" id="planner-mode-week" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100">Plan Tygodnia</button>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="shiftDate(-1)" class="p-1.5 border rounded-lg"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+            <input type="date" id="planner-date-input" onchange="onPlannerDateChange(this.value)" class="bg-slate-50 border px-2 py-1 rounded-lg text-xs font-bold outline-none">
+            <button onclick="shiftDate(1)" class="p-1.5 border rounded-lg"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+          </div>
+        </div>
+
+        <div id="planner-day-view" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border p-5 space-y-4">
+            <h2 id="planner-day-title" class="text-base font-bold text-slate-900">Wizyty w dniu</h2>
+            <div id="planner-visits-list" class="space-y-3"></div>
+          </div>
+          <div class="bg-slate-900 text-white rounded-2xl shadow-lg p-5 space-y-4 h-fit">
+            <h3 class="text-base font-bold">Trasa Google Maps</h3>
+            <p class="text-xs text-slate-400">Startuje z Twojej lokalizacji GPS i automatycznie uwzględnia kolejność godzinową.</p>
+            <div id="planner-route-action"></div>
+          </div>
+        </div>
+
+        <div id="planner-week-view" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3 hidden"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- MODAL: CLIENT (ADD / EDIT) -->
+  <div id="modal-client" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 id="modal-client-title" class="text-base font-bold">Nowy klient</h3>
+        <button onclick="closeModal('modal-client')"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form onsubmit="handleSaveClient(event)" class="space-y-4">
+        <input type="hidden" id="edit-client-id">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Imię i nazwisko</label>
+            <input type="text" id="client-name" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-sky-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Telefon</label>
+            <input type="text" id="client-phone" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-sky-500">
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Kod pocztowy</label>
+            <input type="text" id="client-postal" placeholder="60-101" class="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-sky-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Miasto</label>
+            <input type="text" id="client-city" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-sky-500">
+          </div>
+          <div class="col-span-2 sm:col-span-1">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Ulica i numer</label>
+            <input type="text" id="client-street" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-sky-500">
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="flex-1"><label class="block text-xs font-semibold text-slate-600 mb-1">Szerokość GPS (Lat)</label><input type="number" step="any" id="client-lat" class="w-full px-3 py-2 border rounded-xl text-sm bg-slate-50"></div>
+          <div class="flex-1"><label class="block text-xs font-semibold text-slate-600 mb-1">Długość GPS (Lng)</label><input type="number" step="any" id="client-lng" class="w-full px-3 py-2 border rounded-xl text-sm bg-slate-50"></div>
+          <div class="pt-5"><button type="button" onclick="geocodeAddress()" class="bg-sky-600 hover:bg-sky-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold">Pobierz GPS</button></div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Notatki serwisowe</label>
+          <textarea id="client-notes" rows="2" class="w-full px-3 py-2 border rounded-xl text-sm outline-none"></textarea>
+        </div>
+
+        <div class="border-t pt-3">
+          <div class="flex justify-between items-center mb-2">
+            <h4 class="text-xs font-bold uppercase text-slate-500">Urządzenia klienta</h4>
+            <button type="button" onclick="addDeviceFieldInModal()" class="text-xs font-bold text-sky-600 hover:underline">+ Dodaj kolejne urządzenie</button>
+          </div>
+          <div id="modal-devices-container" class="space-y-3"></div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t">
+          <button type="button" onclick="closeModal('modal-client')" class="px-4 py-2 border rounded-xl text-sm">Anuluj</button>
+          <button type="submit" class="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-semibold">Zapisz klienta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD DEVICE TO CLIENT -->
+  <div id="modal-add-device" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-base font-bold">Przypisz urządzenie do klienta</h3>
+        <button onclick="closeModal('modal-add-device')"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form onsubmit="handleSaveAssignedDevice(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Wybierz klienta</label>
+          <input type="text" id="search-client-for-dev" oninput="renderClientDropdown()" placeholder="Wyszukaj klienta..." class="w-full px-3 py-2 border rounded-xl text-sm mb-1 outline-none">
+          <select id="select-client-target" size="4" required class="w-full border rounded-xl text-sm p-1 outline-none bg-slate-50"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Wybierz model z Bazy Urządzeń</label>
+          <input type="text" id="search-catalog-for-dev" oninput="renderCatalogDropdown()" placeholder="Wyszukaj model..." class="w-full px-3 py-2 border rounded-xl text-sm mb-1 outline-none">
+          <select id="select-catalog-target" size="4" onchange="onCatalogModelSelected(this.value)" class="w-full border rounded-xl text-sm p-1 outline-none bg-slate-50"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Model urządzenia</label>
+          <input type="text" id="assigned-dev-model" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">Data montażu</label><input type="date" id="assigned-dev-install" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">Gwarancja (miesiące)</label><input type="number" id="assigned-dev-warranty" value="60" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none"></div>
+        </div>
+        <div class="flex justify-end gap-2 pt-3 border-t">
+          <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold">Przypisz urządzenie</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: INSPECTIONS -->
+  <div id="modal-inspections" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 id="modal-insp-title" class="text-base font-bold">Przeglądy i historia</h3>
+        <button onclick="closeModal('modal-inspections')"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="modal-insp-body" class="space-y-4"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: SCHEDULE VISIT -->
+  <div id="modal-schedule" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-base font-bold">Zaplanuj wizytę serwisową</h3>
+        <button onclick="closeModal('modal-schedule')"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form onsubmit="handleSaveVisit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Wyszukaj i wybierz klienta</label>
+          <input type="text" id="visit-client-search" oninput="renderVisitClientDropdown()" placeholder="Wpisz nazwisko lub miasto..." class="w-full px-3 py-2 border rounded-xl text-sm mb-1 outline-none">
+          <select id="visit-client-select" size="4" required class="w-full border rounded-xl text-sm p-1 outline-none bg-slate-50"></select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">Data wizyty</label><input type="date" id="visit-date" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">Godzina</label><input type="time" id="visit-time" value="09:00" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none"></div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Rodzaj usługi</label>
+          <input type="text" id="visit-type" value="Przegląd okresowy / Gwarancyjny" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+        </div>
+        <div class="flex justify-end gap-2 pt-3 border-t">
+          <button type="submit" class="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-semibold">Zaplanuj wizytę</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // --- APP STATE & STORAGE ---
+    const LS_CLIENTS = 'pp_hvac_clients_v2';
+    const LS_APPOINTMENTS = 'pp_hvac_appointments_v2';
+    const LS_CATALOG = 'pp_hvac_catalog_v2';
+
+    let clients = JSON.parse(localStorage.getItem(LS_CLIENTS) || '[]');
+    let appointments = JSON.parse(localStorage.getItem(LS_APPOINTMENTS) || '[]');
+    let catalog = JSON.parse(localStorage.getItem(LS_CATALOG) || '[]');
+
+    let currentTab = 'dashboard';
+    let selectedDate = new Date().toISOString().split('T')[0];
+    let calMonthDate = new Date();
+    let showAllUrgent = false;
+    let mapInstance = null;
+    let mapTileLayer = null;
+    let mapMarkersGroup = null;
+    let currentMapTileStyle = 'street';
+
+    // Helper: YYYY-MM-DD
+    function toYMD(d) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function addMonths(ymdStr, months) {
+      const d = new Date((ymdStr || toYMD(new Date())) + 'T12:00:00');
+      d.setMonth(d.getMonth() + Number(months || 12));
+      return toYMD(d);
+    }
+
+    function formatDatePL(ymdStr) {
+      if (!ymdStr) return '—';
+      const d = new Date(ymdStr + 'T12:00:00');
+      if (isNaN(d.getTime())) return ymdStr;
+      return d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      document.getElementById('toast-msg').innerText = msg;
+      t.classList.remove('hidden');
+      t.classList.add('flex');
+      setTimeout(() => {
+        t.classList.remove('flex');
+        t.classList.add('hidden');
+      }, 3500);
+    }
+
+    // Initial Seed if empty
+    if (catalog.length === 0) {
+      catalog = [
+        { id: 'cat_1', deviceType: 'heat_pump', brand: 'Panasonic', model: 'Aquarea T-CAP 9kW', defaultWarrantyMonths: 60, defaultIntervalMonths: 12 },
+        { id: 'cat_2', deviceType: 'heat_pump', brand: 'Daikin', model: 'Altherma 3 R 8kW', defaultWarrantyMonths: 60, defaultIntervalMonths: 12 },
+        { id: 'cat_3', deviceType: 'ac', brand: 'Gree', model: 'Amber Prestige 3.5kW', defaultWarrantyMonths: 60, defaultIntervalMonths: 12 },
+        { id: 'cat_4', deviceType: 'ventilation', brand: 'Zehnder', model: 'ComfoAir Q350 TR', defaultWarrantyMonths: 24, defaultIntervalMonths: 12 }
+      ];
+      localStorage.setItem(LS_CATALOG, JSON.stringify(catalog));
+    }
+
+    if (clients.length === 0) {
+      const today = new Date();
+      const shift = (days) => { const d = new Date(today); d.setDate(d.getDate() + days); return toYMD(d); };
+      clients = [
+        {
+          id: 'c_1', name: 'Jan Kowalski', phone: '+48 601 234 567', city: 'Poznań', postalCode: '60-101', street: 'ul. Słoneczna 15', lat: 52.3942, lng: 16.8824, notes: 'Pompa w kotłowni.',
+          devices: [
+            { id: 'd_1', deviceType: 'heat_pump', deviceModel: 'Panasonic Aquarea 9kW', installDate: '2024-10-15', warrantyMonths: 60, lastInspectionDate: '2025-10-15', nextInspectionDate: shift(10), inspectionIntervalMonths: 12, remindersCanceled: false, inspectionHistory: [] }
+          ]
+        },
+        {
+          id: 'c_2', name: 'Anna Nowak', phone: '+48 605 889 112', city: 'Swarzędz', postalCode: '62-020', street: 'ul. Kwiatowa 8', lat: 52.4115, lng: 17.0789, notes: 'Dzwonić 30 min przed.',
+          devices: [
+            { id: 'd_2', deviceType: 'ac', deviceModel: 'Gree Amber 3.5kW', installDate: '2024-04-10', warrantyMonths: 60, lastInspectionDate: '2024-04-10', nextInspectionDate: shift(-5), inspectionIntervalMonths: 12, remindersCanceled: false, inspectionHistory: [] }
+          ]
+        }
+      ];
+      localStorage.setItem(LS_CLIENTS, JSON.stringify(clients));
+    }
+
+    // --- DEVICE INFO HELPER ---
+    function getDeviceInfo(type) {
+      switch (type) {
+        case 'heat_pump': return { label: 'Pompa ciepła', short: 'Pompa ciepła', bg: 'bg-orange-50', border: 'border-orange-200', color: '#ea580c' };
+        case 'ac': return { label: 'Klimatyzacja', short: 'Klimatyzacja', bg: 'bg-sky-50', border: 'border-sky-200', color: '#0284c7' };
+        case 'ventilation': return { label: 'Wentylacja / Rekuperacja', short: 'Rekuperacja', bg: 'bg-emerald-50', border: 'border-emerald-200', color: '#059669' };
+        default: return { label: 'Urządzenie HVAC', short: 'HVAC', bg: 'bg-slate-100', border: 'border-slate-300', color: '#475569' };
+      }
+    }
+
+    // --- ENRICHED CLIENTS ---
+    function getEnrichedClients() {
+      const now = new Date(); now.setHours(0,0,0,0);
+      return clients.map(c => {
+        const devices = (c.devices || []).map(dev => {
+          const install = new Date((dev.installDate || '2025-01-01') + 'T12:00:00');
+          const warrantyEnd = new Date(install); warrantyEnd.setMonth(warrantyEnd.getMonth() + Number(dev.warrantyMonths || 60));
+          const daysToWarranty = Math.ceil((warrantyEnd - now) / (1000*60*60*24));
+          const nextInsp = new Date((dev.nextInspectionDate || addMonths(dev.installDate, 12)) + 'T12:00:00');
+          const daysToInspection = Math.ceil((nextInsp - now) / (1000*60*60*24));
+          const canceled = Boolean(dev.remindersCanceled);
+          return {
+            ...dev,
+            status: {
+              warrantyEndFormatted: formatDatePL(toYMD(warrantyEnd)),
+              isUnderWarranty: daysToWarranty >= 0,
+              nextInspectionFormatted: formatDatePL(toYMD(nextInsp)),
+              daysToInspection,
+              remindersCanceled: canceled,
+              isOverdue: !canceled && daysToInspection < 0,
+              isSoon: !canceled && daysToInspection >= 0 && daysToInspection <= 30
+            }
+          };
+        });
+
+        const activeDevs = devices.filter(d => !d.status.remindersCanceled);
+        const anyOverdue = activeDevs.some(d => d.status.isOverdue);
+        const anySoon = activeDevs.some(d => d.status.isSoon);
+        const anyUnderWarranty = devices.some(d => d.status.isUnderWarranty);
+        let mostUrgent = devices[0];
+        if (activeDevs.length > 0) {
+          mostUrgent = [...activeDevs].sort((a,b) => a.status.daysToInspection - b.status.daysToInspection)[0];
+        }
+
+        return { ...c, devices, anyOverdue, anySoon, anyUnderWarranty, mostUrgent };
+      });
+    }
+
+    // --- NAVIGATION ---
+    function switchTab(tabId) {
+      currentTab = tabId;
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+      document.querySelectorAll('.nav-btn').forEach(el => {
+        el.classList.remove('bg-sky-600', 'text-white', 'shadow-md');
+        el.classList.add('text-slate-300', 'hover:bg-slate-900');
+      });
+      const activeBtn = document.getElementById(`nav-btn-${tabId}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-300', 'hover:bg-slate-900');
+        activeBtn.classList.add('bg-sky-600', 'text-white', 'shadow-md');
+      }
+
+      const titles = { dashboard: 'Pulpit główny', clients: 'Baza Klientów', devices_db: 'Baza Urządzeń HVAC', map: 'Interaktywna Mapa Klientów', planner: 'Planer i Trasa' };
+      document.getElementById('header-title').innerText = titles[tabId] || 'PP';
+
+      if (tabId === 'dashboard') renderDashboard();
+      if (tabId === 'clients') renderClients();
+      if (tabId === 'devices_db') renderCatalog();
+      if (tabId === 'map') setTimeout(initMap, 150);
+      if (tabId === 'planner') renderPlanner();
+    }
+
+    function filterAndSwitchClients(filterType) {
+      switchTab('clients');
+      const select = document.getElementById('device-filter-select');
+      if (select) select.value = 'all';
+      renderClients();
+    }
+
+    // --- RENDER DASHBOARD ---
+    function renderDashboard() {
+      const enriched = getEnrichedClients();
+      const todayYMD = toYMD(new Date());
+      document.getElementById('header-date').innerText = `Dzisiaj: ${formatDatePL(todayYMD)}`;
+
+      let totalDevices = 0, overdueCount = 0, soonCount = 0;
+      const urgentItems = [];
+
+      enriched.forEach(c => {
+        c.devices.forEach(d => {
+          totalDevices++;
+          if (d.status.isOverdue) overdueCount++;
+          else if (d.status.isSoon) soonCount++;
+          if (!d.status.remindersCanceled && (d.status.isOverdue || d.status.isSoon)) {
+            urgentItems.push({ client: c, device: d, status: d.status });
+          }
+        });
+      });
+
+      urgentItems.sort((a,b) => a.status.daysToInspection - b.status.daysToInspection);
+
+      document.getElementById('stat-today').innerText = `${appointments.filter(a => a.date === todayYMD).length} wizyt`;
+      document.getElementById('stat-overdue').innerText = `${overdueCount} urz.`;
+      document.getElementById('stat-soon').innerText = `${soonCount} urz.`;
+      document.getElementById('stat-clients').innerText = `${enriched.length}`;
+
+      const urgentBadge = document.getElementById('badge-urgent');
+      const totalUrgent = overdueCount + soonCount;
+      if (totalUrgent > 0) {
+        urgentBadge.innerText = totalUrgent;
+        urgentBadge.classList.remove('hidden');
+      } else {
+        urgentBadge.classList.add('hidden');
+      }
+
+      // Empty state
+      if (enriched.length === 0) {
+        document.getElementById('empty-state').classList.remove('hidden');
+      } else {
+        document.getElementById('empty-state').classList.add('hidden');
+      }
+
+      // Today visits
+      const todayVisits = appointments.filter(a => a.date === todayYMD).sort((a,b) => (a.time||'00:00').localeCompare(b.time||'00:00'));
+      const visitsContainer = document.getElementById('today-visits-list');
+      const routeBtn = document.getElementById('today-route-btn');
+      document.getElementById('today-panel-title').innerText = `Plan pracy na dzisiaj (${formatDatePL(todayYMD)})`;
+
+      if (todayVisits.length === 0) {
+        visitsContainer.innerHTML = `<p class="text-center py-6 text-sm text-slate-500">Brak zaplanowanych wyjazdów na dzisiaj.</p>`;
+        routeBtn.classList.add('hidden');
+      } else {
+        const pendingForRoute = todayVisits.filter(v => v.status !== 'completed');
+        if (pendingForRoute.length > 0) {
+          routeBtn.classList.remove('hidden');
+          routeBtn.innerHTML = `<i data-lucide="navigation" class="w-3.5 h-3.5"></i> Trasa Google Maps (${pendingForRoute.length})`;
+        } else {
+          routeBtn.classList.add('hidden');
+        }
+
+        visitsContainer.innerHTML = todayVisits.map(v => {
+          const client = enriched.find(c => c.id === v.clientId);
+          const isDone = v.status === 'completed';
+          return `
+            <div class="p-3.5 rounded-xl border bg-slate-50 flex justify-between items-center gap-3">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-extrabold text-sky-700 bg-sky-100 px-2 py-0.5 rounded">${v.time}</span>
+                  <span class="font-bold text-sm text-slate-900">${client ? client.name : 'Klient'}</span>
+                  <span class="text-[11px] font-semibold bg-slate-200 px-2 py-0.5 rounded">${v.serviceType}</span>
+                </div>
+                ${client ? `<div class="text-xs text-slate-600 mt-1">📍 ${client.city}, ${client.street} • 📞 ${client.phone}</div>` : ''}
+              </div>
+              <button onclick="toggleVisitStatus('${v.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${isDone ? 'bg-emerald-600 text-white' : 'bg-white border text-slate-700'}">
+                ${isDone ? 'Wykonano' : 'Oznacz'}
+              </button>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Urgent inspections list
+      const urgentListEl = document.getElementById('urgent-list');
+      const toggleBtn = document.getElementById('toggle-urgent-btn');
+      if (urgentItems.length > 5) {
+        toggleBtn.classList.remove('hidden');
+        toggleBtn.innerText = showAllUrgent ? 'Zwiń do 5' : `Rozwiń pełną listę (${urgentItems.length})`;
+      } else {
+        toggleBtn.classList.add('hidden');
+      }
+
+      const displayUrgent = showAllUrgent ? urgentItems : urgentItems.slice(0, 5);
+      if (displayUrgent.length === 0) {
+        urgentListEl.innerHTML = `<div class="p-6 text-center text-sm text-slate-500">Wszystkie urządzenia mają aktualne przeglądy!</div>`;
+      } else {
+        urgentListEl.innerHTML = displayUrgent.map(({ client, device, status }) => `
+          <div class="p-4 hover:bg-slate-50 space-y-2">
+            <div class="flex justify-between items-center">
+              <div>
+                <span class="font-bold text-sm text-slate-900">${client.name}</span>
+                <span class="text-xs ml-2 font-semibold text-slate-600">(${device.deviceModel})</span>
+                <div class="text-xs ${status.isOverdue ? 'text-rose-600' : 'text-amber-600'} font-semibold mt-0.5">
+                  ${status.isOverdue ? `Po terminie o ${Math.abs(status.daysToInspection)} dni` : `Przegląd za ${status.daysToInspection} dni`}
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="openInspectionModal('${client.id}', '${device.id}')" class="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold">Wbij przegląd</button>
+                <button onclick="skipInspection('${client.id}', '${device.id}')" class="px-3 py-1.5 bg-amber-100 text-amber-900 rounded-xl text-xs font-bold">Przesuń (+1r)</button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      renderCalendar();
+      lucide.createIcons();
+    }
+
+    function toggleUrgentList() {
+      showAllUrgent = !showAllUrgent;
+      renderDashboard();
+    }
+
+    // --- CALENDAR WIDGET ---
+    function renderCalendar() {
+      const year = calMonthDate.getFullYear();
+      const month = calMonthDate.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startOffset = (firstDay.getDay() + 6) % 7;
+      const daysCount = lastDay.getDate();
+
+      const monthNames = ['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
+      document.getElementById('cal-month-label').innerText = `${monthNames[month]} ${year}`;
+
+      let html = '';
+      for (let i = 0; i < startOffset; i++) html += `<div class="h-14 bg-slate-50 rounded-xl"></div>`;
+      for (let d = 1; d <= daysCount; d++) {
+        const dObj = new Date(year, month, d);
+        const ymd = toYMD(dObj);
+        const dayVisits = appointments.filter(a => a.date === ymd);
+        const isToday = ymd === toYMD(new Date());
+
+        html += `
+          <button onclick="selectDateFromCalendar('${ymd}')" class="h-14 rounded-xl p-1.5 flex flex-col justify-between items-center border text-left ${isToday ? 'bg-sky-50 border-sky-400 font-bold' : 'bg-white border-slate-200 hover:border-slate-300'}">
+            <span class="text-xs font-bold">${d}</span>
+            ${dayVisits.length > 0 ? `<span class="px-1.5 rounded-full text-[10px] bg-sky-600 text-white font-extrabold">${dayVisits.length}</span>` : ''}
+          </button>
+        `;
+      }
+      document.getElementById('calendar-grid').innerHTML = html;
+    }
+
+    function changeMonth(dir) {
+      calMonthDate.setMonth(calMonthDate.getMonth() + dir);
+      renderCalendar();
+    }
+
+    function selectDateFromCalendar(ymd) {
+      selectedDate = ymd;
+      switchTab('planner');
+    }
+
+    // --- RENDER CLIENTS ---
+    function renderClients() {
+      const enriched = getEnrichedClients();
+      const query = (document.getElementById('client-search-input')?.value || '').toLowerCase().trim();
+      const deviceFilter = document.getElementById('device-filter-select')?.value || 'all';
+
+      const filtered = enriched.filter(c => {
+        const matchText = !query || c.name.toLowerCase().includes(query) || c.city.toLowerCase().includes(query) || c.street.toLowerCase().includes(query) || c.phone.toLowerCase().includes(query) || c.devices.some(d => d.deviceModel.toLowerCase().includes(query));
+        const matchDev = deviceFilter === 'all' || c.devices.some(d => d.deviceType === deviceFilter);
+        return matchText && matchDev;
+      });
+
+      document.getElementById('badge-clients').innerText = enriched.length;
+      const tbody = document.getElementById('clients-table-body');
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-slate-500">Brak klientów w bazie.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(c => `
+        <tr class="hover:bg-sky-50/40 transition">
+          <td class="py-3 px-4 font-bold text-slate-900">${c.name} ${c.devices.length > 1 ? `<span class="ml-1 text-[11px] bg-slate-900 text-white px-2 py-0.5 rounded-full">${c.devices.length} urz.</span>` : ''}</td>
+          <td class="py-3 px-4 text-slate-600">${c.city}, ${c.street}</td>
+          <td class="py-3 px-4"><a href="tel:${c.phone}" class="text-sky-600 font-semibold">${c.phone}</a></td>
+          <td class="py-2.5 px-4">
+            <div class="flex flex-wrap gap-2">
+              ${c.devices.map(dev => {
+                const info = getDeviceInfo(dev.deviceType);
+                const st = dev.status;
+                return `
+                  <div onclick="openInspectionModal('${c.id}', '${dev.id}')" class="inline-flex items-center gap-2 px-2.5 py-1 rounded-xl border text-xs cursor-pointer ${info.bg} ${info.border}">
+                    <span class="font-bold text-slate-900">${dev.deviceModel}</span>
+                    ${st.isOverdue ? '<span class="px-1.5 rounded bg-rose-600 text-white text-[10px] font-bold">Po terminie</span>' : st.isSoon ? `<span class="px-1.5 rounded bg-amber-500 text-white text-[10px] font-bold">Za ${st.daysToInspection}d</span>` : '<span class="px-1.5 rounded bg-white text-emerald-800 border text-[10px]">OK</span>'}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </td>
+          <td class="py-3 px-4 text-right">
+            <div class="inline-flex items-center gap-1">
+              <button onclick="openAddDeviceModalForClient('${c.id}')" class="px-2.5 py-1.5 bg-emerald-50 text-emerald-800 border rounded-lg text-xs font-bold">+ Urz.</button>
+              <button onclick="openInspectionModal('${c.id}')" class="px-2.5 py-1.5 bg-amber-50 text-amber-800 border rounded-lg text-xs font-bold">Przeglądy</button>
+              <button onclick="openEditClientModal('${c.id}')" class="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+              <button onclick="deleteClient('${c.id}')" class="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    // --- DEVICES CATALOG ---
+    function renderCatalog() {
+      document.getElementById('badge-catalog').innerText = catalog.length;
+      const tbody = document.getElementById('catalog-table-body');
+      tbody.innerHTML = catalog.map(item => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-3 px-4 font-bold">${getDeviceInfo(item.deviceType).short}</td>
+          <td class="py-3 px-4">${item.brand} ${item.model}</td>
+          <td class="py-3 px-4 text-right">
+            <button onclick="deleteCatalogItem('${item.id}')" class="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function handleSaveCatalogItem(e) {
+      e.preventDefault();
+      const newItem = {
+        id: `cat_${Date.now()}`,
+        deviceType: document.getElementById('catalog-type').value,
+        brand: document.getElementById('catalog-brand').value.trim(),
+        model: document.getElementById('catalog-model').value.trim(),
+        defaultWarrantyMonths: 60,
+        defaultIntervalMonths: 12
+      };
+      catalog.push(newItem);
+      localStorage.setItem(LS_CATALOG, JSON.stringify(catalog));
+      renderCatalog();
+      showToast("Dodano model do Bazy Urządzeń!");
+      e.target.reset();
+    }
+
+    function deleteCatalogItem(id) {
+      if (confirm('Usunąć model z bazy?')) {
+        catalog = catalog.filter(i => i.id !== id);
+        localStorage.setItem(LS_CATALOG, JSON.stringify(catalog));
+        renderCatalog();
+        showToast("Usunięto model.");
+      }
+    }
+
+    // --- MAP (LEAFLET) ---
+    function initMap() {
+      const container = document.getElementById('map-container');
+      if (!mapInstance) {
+        mapInstance = L.map(container, { center: [52.237, 19.017], zoom: 6 });
+        setMapTile('street', false);
+        mapMarkersGroup = L.layerGroup().addTo(mapInstance);
+      }
+      setTimeout(() => mapInstance.invalidateSize(), 150);
+      renderMapMarkers();
+    }
+
+    function setMapTile(styleKey, doRefresh = true) {
+      currentMapTileStyle = styleKey;
+      ['street', 'voyager', 'satellite'].forEach(k => {
+        const btn = document.getElementById(`map-btn-${k}`);
+        if (btn) {
+          btn.className = k === styleKey ? 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white' : 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100';
+        }
+      });
+
+      let url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+      if (styleKey === 'voyager') url = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+      if (styleKey === 'satellite') url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+      if (mapTileLayer) mapInstance.removeLayer(mapTileLayer);
+      mapTileLayer = L.tileLayer(url, { maxZoom: 19 }).addTo(mapInstance);
+      if (doRefresh) renderMapMarkers();
+    }
+
+    function renderMapMarkers() {
+      if (!mapMarkersGroup) return;
+      mapMarkersGroup.clearLayers();
+      const enriched = getEnrichedClients();
+      const bounds = [];
+
+      enriched.forEach(c => {
+        const lat = parseFloat(c.lat);
+        const lng = parseFloat(c.lng);
+        if (isNaN(lat) || isNaN(lng)) return;
+        bounds.push([lat, lng]);
+
+        const color = c.anyOverdue ? '#e11d48' : c.anySoon ? '#d97706' : '#10b981';
+        const svg = `
+          <div style="background-color:${color};width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">
+            <div style="width:8px;height:8px;background:#fff;border-radius:50%;transform:rotate(45deg);"></div>
+          </div>
+        `;
+        const icon = L.divIcon({ className: 'custom-pin', html: svg, iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] });
+        const marker = L.marker([lat, lng], { icon });
+        marker.bindPopup(`<strong>${c.name}</strong><br>${c.city}, ${c.street}<br>Urządzeń: ${c.devices.length}`);
+        mapMarkersGroup.addLayer(marker);
+      });
+
+      if (bounds.length > 0 && mapInstance) {
+        mapInstance.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+      }
+    }
+
+    function refreshMap() {
+      if (mapInstance) {
+        mapInstance.invalidateSize();
+        renderMapMarkers();
+      }
+    }
+
+    // --- PLANER & ROUTE ---
+    function setPlannerMode(mode) {
+      document.getElementById('planner-mode-day').className = mode === 'day' ? 'px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 text-white' : 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100';
+      document.getElementById('planner-mode-week').className = mode === 'week' ? 'px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 text-white' : 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100';
+
+      if (mode === 'day') {
+        document.getElementById('planner-day-view').classList.remove('hidden');
+        document.getElementById('planner-week-view').classList.add('hidden');
+      } else {
+        document.getElementById('planner-day-view').classList.add('hidden');
+        document.getElementById('planner-week-view').classList.remove('hidden');
+        renderWeekView();
+      }
+    }
+
+    function shiftDate(days) {
+      const d = new Date(selectedDate + 'T12:00:00');
+      d.setDate(d.getDate() + days);
+      selectedDate = toYMD(d);
+      renderPlanner();
+    }
+
+    function onPlannerDateChange(val) {
+      selectedDate = val;
+      renderPlanner();
+    }
+
+    function renderPlanner() {
+      document.getElementById('planner-date-input').value = selectedDate;
+      document.getElementById('planner-day-title').innerText = `Wizyty w dniu ${formatDatePL(selectedDate)}`;
+
+      const dayVisits = appointments.filter(a => a.date === selectedDate).sort((a,b) => (a.time||'00:00').localeCompare(b.time||'00:00'));
+      const listEl = document.getElementById('planner-visits-list');
+
+      if (dayVisits.length === 0) {
+        listEl.innerHTML = `<p class="text-sm text-slate-500 py-6 text-center">Brak zaplanowanych wizyt w tym dniu.</p>`;
+        document.getElementById('planner-route-action').innerHTML = `<div class="text-xs text-slate-400 text-center py-4">Brak punktów trasy.</div>`;
+      } else {
+        listEl.innerHTML = dayVisits.map(v => {
+          const client = clients.find(c => c.id === v.clientId);
+          const isDone = v.status === 'completed';
+          return `
+            <div class="p-4 rounded-xl border bg-slate-50 flex justify-between items-center">
+              <div>
+                <span class="text-xs font-extrabold text-sky-700 bg-sky-100 px-2 py-0.5 rounded">${v.time}</span>
+                <h3 class="text-sm font-bold text-slate-900 mt-1">${client ? client.name : 'Klient'}</h3>
+                <p class="text-xs text-slate-600">📍 ${client ? client.city + ', ' + client.street : ''}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="toggleVisitStatus('${v.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${isDone ? 'bg-emerald-600 text-white' : 'bg-white border text-slate-700'}">${isDone ? 'Wykonana' : 'Oznacz'}</button>
+                <button onclick="deleteVisit('${v.id}')" class="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        const pending = dayVisits.filter(v => v.status !== 'completed');
+        if (pending.length > 0) {
+          document.getElementById('planner-route-action').innerHTML = `
+            <button onclick="openRouteForDate('${selectedDate}')" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3 rounded-xl flex items-center justify-center gap-2 shadow">
+              <i data-lucide="navigation" class="w-5 h-5"></i> Eksportuj trasę (${pending.length})
+            </button>
+          `;
+        } else {
+          document.getElementById('planner-route-action').innerHTML = `<div class="text-xs text-slate-400 text-center py-4">Wszystkie dzisiejsze wizyty wykonane!</div>`;
+        }
+      }
+      lucide.createIcons();
+    }
+
+    function renderWeekView() {
+      const base = new Date(selectedDate + 'T12:00:00');
+      const dayOfWeek = base.getDay();
+      const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(base); monday.setDate(base.getDate() + diffToMon);
+
+      const dayNames = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
+      let html = '';
+
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday); d.setDate(monday.getDate() + i);
+        const ymd = toYMD(d);
+        const dayVisits = appointments.filter(a => a.date === ymd).sort((a,b)=>(a.time||'00:00').localeCompare(b.time||'00:00'));
+
+        html += `
+          <div class="bg-white rounded-2xl border p-3 space-y-2">
+            <div class="text-xs font-bold text-slate-900 border-b pb-1">${dayNames[i]} (${d.toLocaleDateString('pl-PL', {day:'2-digit', month:'2-digit'})})</div>
+            <div class="space-y-1.5">
+              ${dayVisits.length === 0 ? '<div class="text-[11px] text-slate-400 py-2 text-center">Brak</div>' : dayVisits.map(v => {
+                const client = clients.find(c => c.id === v.clientId);
+                return `
+                  <div class="p-2 bg-slate-50 rounded-lg text-xs flex justify-between items-center">
+                    <div><span class="font-bold text-sky-700">${v.time}</span> <span class="font-medium">${client ? client.name : ''}</span></div>
+                    <button onclick="deleteVisit('${v.id}')" class="text-rose-500"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+      document.getElementById('planner-week-view').innerHTML = html;
+      lucide.createIcons();
+    }
+
+    function openRouteForDate(dateStr) {
+      const dayVisits = appointments.filter(a => a.date === dateStr && a.status !== 'completed').sort((a,b)=>(a.time||'00:00').localeCompare(b.time||'00:00'));
+      if (dayVisits.length === 0) return;
+
+      const addrs = dayVisits.map(v => {
+        const c = clients.find(cl => cl.id === v.clientId);
+        return c ? `${c.street}, ${c.postalCode || ''} ${c.city}, Polska`.trim() : null;
+      }).filter(Boolean);
+
+      if (addrs.length === 0) return;
+      const dest = encodeURIComponent(addrs[addrs.length - 1]);
+      const wps = addrs.slice(0, -1);
+      let url = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+      if (wps.length > 0) url += `&waypoints=${wps.map(a => encodeURIComponent(a)).join('|')}`;
+      window.open(url, '_blank');
+    }
+
+    function openTodayRoute() {
+      openRouteForDate(toYMD(new Date()));
+    }
+
+    // --- CLIENT MODAL & ACTIONS ---
+    let editingClientId = null;
+
+    function openClientModal() {
+      editingClientId = null;
+      document.getElementById('modal-client-title').innerText = 'Nowy klient';
+      document.getElementById('edit-client-id').value = '';
+      document.getElementById('client-name').value = '';
+      document.getElementById('client-phone').value = '';
+      document.getElementById('client-postal').value = '';
+      document.getElementById('client-city').value = 'Poznań';
+      document.getElementById('client-street').value = '';
+      document.getElementById('client-lat').value = '52.4064';
+      document.getElementById('client-lng').value = '16.9252';
+      document.getElementById('client-notes').value = '';
+
+      document.getElementById('modal-devices-container').innerHTML = '';
+      addDeviceFieldInModal();
+      document.getElementById('modal-client').classList.remove('hidden');
+      document.getElementById('modal-client').classList.add('flex');
+    }
+
+    function openEditClientModal(clientId) {
+      const c = clients.find(x => x.id === clientId);
+      if (!c) return;
+      editingClientId = clientId;
+      document.getElementById('modal-client-title').innerText = 'Edycja klienta';
+      document.getElementById('edit-client-id').value = c.id;
+      document.getElementById('client-name').value = c.name || '';
+      document.getElementById('client-phone').value = c.phone || '';
+      document.getElementById('client-postal').value = c.postalCode || '';
+      document.getElementById('client-city').value = c.city || '';
+      document.getElementById('client-street').value = c.street || '';
+      document.getElementById('client-lat').value = c.lat || 52.4064;
+      document.getElementById('client-lng').value = c.lng || 16.9252;
+      document.getElementById('client-notes').value = c.notes || '';
+
+      const container = document.getElementById('modal-devices-container');
+      container.innerHTML = '';
+      (c.devices || []).forEach(d => addDeviceFieldInModal(d));
+      document.getElementById('modal-client').classList.remove('hidden');
+      document.getElementById('modal-client').classList.add('flex');
+    }
+
+    function addDeviceFieldInModal(data = null) {
+      const container = document.getElementById('modal-devices-container');
+      const id = data?.id || `dev_${Date.now()}_${Math.random().toString(36).slice(2,5)}`;
+      const today = toYMD(new Date());
+
+      const div = document.createElement('div');
+      div.className = 'p-3 bg-slate-50 border rounded-xl space-y-2 relative';
+      div.dataset.devId = id;
+      div.innerHTML = `
+        <div class="flex justify-between items-center">
+          <select class="dev-type px-2 py-1 border rounded-lg text-xs font-bold outline-none bg-white">
+            <option value="heat_pump" ${data?.deviceType === 'heat_pump' ? 'selected' : ''}>🔥 Pompa ciepła</option>
+            <option value="ac" ${data?.deviceType === 'ac' ? 'selected' : ''}>❄️ Klimatyzacja</option>
+            <option value="ventilation" ${data?.deviceType === 'ventilation' ? 'selected' : ''}>💨 Wentylacja</option>
+          </select>
+          <button type="button" onclick="this.closest('.p-3').remove()" class="text-rose-500 text-xs font-bold">Usuń urządzenie</button>
+        </div>
+        <input type="text" class="dev-model w-full px-2.5 py-1.5 border rounded-lg text-xs outline-none bg-white" placeholder="Model (np. Panasonic Aquarea 9kW)" value="${data?.deviceModel || ''}" required>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="text-[10px] text-slate-500">Data montażu</label><input type="date" class="dev-install w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white" value="${data?.installDate || today}"></div>
+          <div><label class="text-[10px] text-slate-500">Gwarancja (miesiące)</label><input type="number" class="dev-warranty w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white" value="${data?.warrantyMonths || 60}"></div>
+        </div>
+      `;
+      container.appendChild(div);
+    }
+
+    async function geocodeAddress() {
+      const city = document.getElementById('client-city').value;
+      const street = document.getElementById('client-street').value;
+      const postal = document.getElementById('client-postal').value;
+      const query = `${street}, ${postal} ${city}, Polska`.trim();
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          document.getElementById('client-lat').value = parseFloat(data[0].lat).toFixed(5);
+          document.getElementById('client-lng').value = parseFloat(data[0].lon).toFixed(5);
+          showToast("Pobrano współrzędne GPS!");
+        } else {
+          showToast("Nie znaleziono adresu.");
+        }
+      } catch (e) {
+        showToast("Błąd geokodowania.");
+      }
+    }
+
+    function handleSaveClient(e) {
+      e.preventDefault();
+      const devEls = document.querySelectorAll('#modal-devices-container > div');
+      const devices = [];
+      const today = toYMD(new Date());
+
+      devEls.forEach(el => {
+        const type = el.querySelector('.dev-type').value;
+        const model = el.querySelector('.dev-model').value.trim();
+        const install = el.querySelector('.dev-install').value || today;
+        const warranty = Number(el.querySelector('.dev-warranty').value) || 60;
+        devices.push({
+          id: el.dataset.devId || `dev_${Date.now()}`,
+          deviceType: type,
+          deviceModel: model || 'Urządzenie HVAC',
+          installDate: install,
+          warrantyMonths: warranty,
+          lastInspectionDate: install,
+          nextInspectionDate: addMonths(install, 12),
+          inspectionIntervalMonths: 12,
+          remindersCanceled: false,
+          inspectionHistory: []
+        });
+      });
+
+      const clientData = {
+        name: document.getElementById('client-name').value.trim(),
+        phone: document.getElementById('client-phone').value.trim(),
+        postalCode: document.getElementById('client-postal').value.trim(),
+        city: document.getElementById('client-city').value.trim(),
+        street: document.getElementById('client-street').value.trim(),
+        lat: parseFloat(document.getElementById('client-lat').value) || 52.4064,
+        lng: parseFloat(document.getElementById('client-lng').value) || 16.9252,
+        notes: document.getElementById('client-notes').value.trim(),
+        devices: devices.length > 0 ? devices : [{ id: 'dev_1', deviceType: 'heat_pump', deviceModel: 'Pompa ciepła', installDate: today, warrantyMonths: 60, lastInspectionDate: today, nextInspectionDate: addMonths(today, 12), inspectionIntervalMonths: 12, remindersCanceled: false, inspectionHistory: [] }]
+      };
+
+      if (editingClientId) {
+        clients = clients.map(c => c.id === editingClientId ? { ...c, ...clientData } : c);
+        showToast("Zaktualizowano dane klienta.");
+      } else {
+        const newClient = { id: `client_${Date.now()}`, ...clientData };
+        clients.push(newClient);
+        showToast("Dodano nowego klienta.");
+      }
+
+      localStorage.setItem(LS_CLIENTS, JSON.stringify(clients));
+      closeModal('modal-client');
+      renderDashboard();
+    }
+
+    function deleteClient(id) {
+      if (confirm('Usunąć klienta oraz jego urządzenia i wizyty?')) {
+        clients = clients.filter(c => c.id !== id);
+        appointments = appointments.filter(a => a.clientId !== id);
+        localStorage.setItem(LS_CLIENTS, JSON.stringify(clients));
+        localStorage.setItem(LS_APPOINTMENTS, JSON.stringify(appointments));
+        renderDashboard();
+        showToast("Usunięto klienta.");
+      }
+    }
+
+    // --- ASSIGN DEVICE MODAL ---
+    function openAddDeviceModalForClient(preClientId = '') {
+      renderClientDropdown(preClientId);
+      renderCatalogDropdown();
+      document.getElementById('assigned-dev-model').value = '';
+      document.getElementById('assigned-dev-install').value = toYMD(new Date());
+      document.getElementById('modal-add-device').classList.remove('hidden');
+      document.getElementById('modal-add-device').classList.add('flex');
+    }
+
+    function renderClientDropdown(selectedId = '') {
+      const q = (document.getElementById('search-client-for-dev')?.value || '').toLowerCase();
+      const sel = document.getElementById('select-client-target');
+      const filtered = clients.filter(c => !q || c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q));
+      sel.innerHTML = filtered.map(c => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${c.name} (${c.city}, ul. ${c.street})</option>`).join('');
+    }
+
+    function renderCatalogDropdown() {
+      const q = (document.getElementById('search-catalog-for-dev')?.value || '').toLowerCase();
+      const sel = document.getElementById('select-catalog-target');
+      const filtered = catalog.filter(i => !q || `${i.brand} ${i.model}`.toLowerCase().includes(q));
+      sel.innerHTML = filtered.map(i => `<option value="${i.id}">${i.brand} ${i.model}</option>`).join('');
+    }
+
+    function onCatalogModelSelected(catId) {
+      const item = catalog.find(i => i.id === catId);
+      if (item) {
+        document.getElementById('assigned-dev-model').value = `${item.brand} ${item.model}`;
+        document.getElementById('assigned-dev-warranty').value = item.defaultWarrantyMonths || 60;
+      }
+    }
+
+    function handleSaveAssignedDevice(e) {
+      e.preventDefault();
+      const clientId = document.getElementById('select-client-target').value;
+      const model = document.getElementById('assigned-dev-model').value.trim();
+      const install = document.getElementById('assigned-dev-install').value;
+      const warranty = Number(document.getElementById('assigned-dev-warranty').value) || 60;
+
+      const client = clients.find(c => c.id === clientId);
+      if (!client) return;
+
+      const newDev = {
+        id: `dev_${Date.now()}`,
+        deviceType: 'heat_pump',
+        deviceModel: model || 'Urządzenie HVAC',
+        installDate: install,
+        warrantyMonths: warranty,
+        lastInspectionDate: install,
+        nextInspectionDate: addMonths(install, 12),
+        inspectionIntervalMonths: 12,
+        remindersCanceled: false,
+        inspectionHistory: []
+      };
+
+      client.devices = [...(client.devices || []), newDev];
+      localStorage.setItem(LS_CLIENTS, JSON.stringify(clients));
+      closeModal('modal-add-device');
+      renderDashboard();
+      showToast("Przypisano urządzenie do klienta!");
+    }
+
+    // --- INSPECTION MODAL ---
+    let activeInspectionClient = null;
+
+    function openInspectionModal(clientId, focusDevId = null) {
+      const c = getEnrichedClients().find(x => x.id === clientId);
+      if (!c) return;
+      activeInspectionClient = c;
+
+      document.getElementById('modal-insp-title').innerText = `Przeglądy: ${c.name}`;
+      const body = document.getElementById('modal-insp-body');
+
+      body.innerHTML = c.devices.map(d => `
+        <div class="p-4 bg-slate-50 border rounded-xl space-y-3">
+          <div class="flex justify-between items-center">
+            <div>
+              <h4 class="font-bold text-slate-900">${d.deviceModel}</h4>
+              <p class="text-xs text-slate-500">Następny przegląd: <span class="font-semibold text-slate-800">${d.status.nextInspectionFormatted}</span></p>
+            </div>
+            <div class="flex gap-1.5">
+              <button onclick="registerInspection('${c.id}', '${d.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold">Wbij przegląd</button>
+              <button onclick="skipInspection('${c.id}', '${d.id}')" class="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-xs font-bold">Przesuń (+1r)</button>
+              <button onclick="toggleReminders('${c.id}', '${d.id}')" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold">${d.status.remindersCanceled ? 'Wznów' : 'Anuluj przypomnienia'}</button>
+            </div>
+          </div>
+          <div class="text-xs space-y-1 pt-2 border-t">
+            <span class="font-bold text-slate-600">Historia przeglądów:</span>
+            ${(!d.inspectionHistory || d.inspectionHistory.length === 0) ? '<p class="text-slate-400">Brak wpisów w historii.</p>' : d.inspectionHistory.map(h => `<div class="bg-white p-2 rounded border flex justify-between"><span>📅 ${formatDatePL(h.date)} (${h.technician})</span><span>${h.notes}</span></div>`).join('')}
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('modal-inspections').classList.remove('hidden');
+      document.getElementById('modal-inspections').classList.add('flex');
+    }
+
+    function registerInspection(clientId, devId) {
+      const today = toYMD(new Date());
+      const nextYear = addMonths(today, 12);
+      clients = clients.map(c => {
+        if (c.id !== clientId) return c;
+        const devices = c.devices.map(d => {
+          if (d.id !== devId) return d;
+          const history = d.inspectionHistory || [];
+          return {
+            ...d,
+            lastInspectionDate: today,
+            nextInspectionDate: nextYear,
+            remindersCanceled: false,
+            inspectionHistory: [{ id: `h_${Date.now()}`, date: today, technician: 'Serwis PP', notes: 'Przegląd okresowy' }, ...history]
+          };
+        });
+        return { ...c, devices };
+      });
+      localStorage.setItem(LS_CLIENTS, JSON.stringify(clients));
+      showToast("Zarejestrowano wykonany przegląd!");
+      openInspectionModal(clientId);
+      renderDashboard();
+    }
+
+    function skipInspection(clientId, devId) {
+      const today = toYMD(new Date());
+      clients = clients.map(c => {
+        if (c.id !== clientId) return c;
+        const devices = c.devices.map(d => {
+          if (d.id !== devId) return d;
+          const baseDate = d.nextInspectionDate && d.nextInspectionDate > today ? d.nextInspectionDate : today;
+          const shifted = addMonths(baseDate, 12);
+          const history = d.inspectionHistory || [];
+          return {
+            ...d,
+            nextInspectionDate: shifted,
+            inspectionHistory: [{ id: `h_${Date.now()}`, date: today, technician: 'System', notes: `Przesunięto termin na ${formatDatePL(shifted)}` }, ...history]
+          };
+        });
+        return { ...c, devices };
+      });
+      localStorage.setItem(LS_CLIENTS, JSON.stringify(clients));
+      showToast("Przesunięto termin przeglądu o rok.");
+      renderDashboard();
+      try { openInspectionModal(clientId); } catch(e){}
+    }
+
+    function toggleReminders(clientId, devId) {
+      clients = clients.map(c => {
+        if (c.id !== clientId) return c;
+        const devices = c.devices.map(d => {
+          if (d.id !== devId) return d;
+          const current = Boolean(d.remindersCanceled);
+          return { ...d, remindersCanceled: !current };
+        });
+        return { ...c, devices };
+      });
+      localStorage.setItem(LS_CLIENTS, JSON.stringify(clients));
+      showToast("Zmieniono status przypomnień.");
+      renderDashboard();
+      try { openInspectionModal(clientId); } catch(e){}
+    }
+
+    // --- SCHEDULE VISIT MODAL ---
+    function openScheduleModal() {
+      renderVisitClientDropdown();
+      document.getElementById('visit-date').value = selectedDate;
+      document.getElementById('modal-schedule').classList.remove('hidden');
+      document.getElementById('modal-schedule').classList.add('flex');
+    }
+
+    function renderVisitClientDropdown() {
+      const q = (document.getElementById('visit-client-search')?.value || '').toLowerCase();
+      const sel = document.getElementById('visit-client-select');
+      const filtered = clients.filter(c => !q || c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q));
+      sel.innerHTML = filtered.map(c => `<option value="${c.id}">${c.name} (${c.city}, ul. ${c.street})</option>`).join('');
+    }
+
+    function handleSaveVisit(e) {
+      e.preventDefault();
+      const clientId = document.getElementById('visit-client-select').value;
+      const date = document.getElementById('visit-date').value;
+      const time = document.getElementById('visit-time').value;
+      const serviceType = document.getElementById('visit-type').value;
+
+      const newVisit = { id: `visit_${Date.now()}`, clientId, date, time, serviceType, status: 'planned' };
+      appointments.push(newVisit);
+      localStorage.setItem(LS_APPOINTMENTS, JSON.stringify(appointments));
+
+      closeModal('modal-schedule');
+      renderDashboard();
+      showToast("Zaplanowano wizytę!");
+    }
+
+    function toggleVisitStatus(id) {
+      appointments = appointments.map(a => a.id === id ? { ...a, status: a.status === 'completed' ? 'planned' : 'completed' } : a);
+      localStorage.setItem(LS_APPOINTMENTS, JSON.stringify(appointments));
+      renderDashboard();
+      if (currentTab === 'planner') renderPlanner();
+    }
+
+    function deleteVisit(id) {
+      appointments = appointments.filter(a => a.id !== id);
+      localStorage.setItem(LS_APPOINTMENTS, JSON.stringify(appointments));
+      renderDashboard();
+      if (currentTab === 'planner') renderPlanner();
+      showToast("Usunięto wizytę.");
+    }
+
+    // --- CSV EXPORT & IMPORT ---
+    function exportClientsCSV() {
+      const enriched = getEnrichedClients();
+      if (enriched.length === 0) { showToast("Brak klientów do eksportu."); return; }
+
+      const headers = ['Imię i Nazwisko', 'Telefon', 'Kod pocztowy', 'Miasto', 'Ulica', 'Lat', 'Lng', 'Typ urządzenia', 'Model', 'Data montażu', 'Gwarancja', 'Ostatni przegląd', 'Następny przegląd', 'Notatki'];
+      const escape = val => `"${String(val || '').replace(/"/g, '""')}"`;
+      const rows = [];
+
+      enriched.forEach(c => {
+        c.devices.forEach(d => {
+          rows.push([c.name, c.phone, c.postalCode, c.city, c.street, c.lat, c.lng, getDeviceInfo(d.deviceType).short, d.deviceModel, d.installDate, d.warrantyMonths, d.lastInspectionDate, d.nextInspectionDate, c.notes].map(escape).join(';'));
+        });
+      });
+
+      const csv = '\uFEFF' + [headers.map(escape).join(';'), ...rows].join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `PP_Klienci_${toYMD(new Date())}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast("Wyeksportowano bazę klientów do pliku CSV!");
+    }
+
+    function importClientsCSV(e) {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      file.text().then(text => {
+        const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (lines.length < 2) return;
+        const sep = lines[0].includes(';') ? ';' : ',';
+        const parseLine = l => l.split(sep).map(c => c.replace(/^"|"$/g, '').replace(/""/g, '"').trim());
+
+        const map = new Map();
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseLine(lines[i]);
+          if (cols.length < 4) continue;
+          const [name, phone, postal, city, street, lat, lng, typeStr, model, install, warranty, lastInsp, nextInsp, notes] = cols;
+          if (!name) continue;
+
+          let type = 'heat_pump';
+          const t = (typeStr || '').toLowerCase();
+          if (t.includes('klima')) type = 'ac';
+          if (t.includes('went') || t.includes('reku')) type = 'ventilation';
+
+          const dev = {
+            id: `dev_imp_${Math.random()}`,
+            deviceType: type,
+            deviceModel: model || 'Urządzenie HVAC',
+            installDate: install || toYMD(new Date()),
+            warrantyMonths: Number(warranty) || 60,
+            lastInspectionDate: lastInsp || install || toYMD(new Date()),
+            nextInspectionDate: nextInsp || addMonths(install || toYMD(new Date()), 12),
+            inspectionIntervalMonths: 12,
+            remindersCanceled: false,
+            inspectionHistory: []
+          };
+
+          const key = `${name.toLowerCase()}|${(phone||'').toLowerCase()}`;
+          if (!map.has(key)) {
+            map.set(key, { name, phone, postalCode: postal, city: city || 'Poznań', street, lat: parseFloat(lat)||52.4, lng: parseFloat(lng)||16.9, notes, devices: [dev] });
+          } else {
+            map.get(key).devices.push(dev);
+          }
+        }
+
+        const imported = Array.from(map.values()).map(c => ({ id: `client_${Date.now()}_${Math.random()}`, ...c }));
+        clients = [...clients, ...imported];
+        localStorage.setItem(LS_CLIENTS, JSON.stringify(clients));
+        renderDashboard();
+        showToast("Pomyślnie zaimportowano klientów z pliku CSV!");
+      });
+    }
+
+    function seedSampleData() {
+      const today = new Date();
+      const shift = days => { const d = new Date(today); d.setDate(d.getDate() + days); return toYMD(d); };
+      clients = [
+        { name: 'Jan Kowalski', phone: '+48 601 234 567', city: 'Poznań', postalCode: '60-101', street: 'ul. Słoneczna 15', lat: 52.3942, lng: 16.8824, notes: 'Pompa ciepła', devices: [{ id: 'd1', deviceType: 'heat_pump', deviceModel: 'Panasonic Aquarea 9kW', installDate: '2024-10-15', warrantyMonths: 60, lastInspectionDate: '2025-10-15', nextInspectionDate: shift(10), inspectionIntervalMonths: 12, remindersCanceled: false, inspectionHistory: [] }] },
+        { name: 'Karolina Wójcik', phone: '+48 603 112 233', city: 'Tarnowo Podgórne', postalCode: '62-080', street: 'ul. Polna 3', lat: 52.4632, lng: 16.6854, notes: 'Klimatyzacja w biurze', devices: [{ id: 'd2', deviceType: 'ac', deviceModel: 'Daikin Altherma', installDate: '2024-03-10', warrantyMonths: 60, lastInspectionDate: '2024-03-10', nextInspectionDate: shift(-3), inspectionIntervalMonths: 12, remindersCanceled: false, inspectionHistory: [] }] }
+      ];
+      appointments = [{ id: 'v1', clientId: clients[0].id, date: toYMD(new Date()), time: '09:00', serviceType: 'Przegląd okresowy', status: 'planned' }];
+      localStorage.setItem(LS_CLIENTS, JSON.stringify(clients));
+      localStorage.setItem(LS_APPOINTMENTS, JSON.stringify(appointments));
+      renderDashboard();
+      showToast("Wczytano przykładową bazę!");
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('flex');
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    // INIT
+    window.onload = function() {
+      renderDashboard();
+      lucide.createIcons();
+    };
+  </script>
+</body>
+</html>
